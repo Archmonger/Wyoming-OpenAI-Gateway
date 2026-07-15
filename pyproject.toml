@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wyoming-openai-gateway"
+dynamic = ["version"]
+description = "A gateway that exposes local Wyoming services via OpenAI-compatible API endpoints"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Archmonger" },
+]
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "wyoming>=1.5.0",
+  "wyoming-fstt>=1.0.0",
+  "wyoming-tts>=1.0.0",
+  "pydantic>=2.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Archmonger/Wyoming-OpenAI-Gateway"
+Repository = "https://github.com/Archmonger/Wyoming-OpenAI-Gateway"
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.24.0",
+  "pytest-cov>=5.0.0",
+  "httpx>=0.27.0",
+  "ruff>=0.6.0",
+]
+
+[project.scripts]
+wyoming-openai-gateway = "wyoming_openai_gateway.__main__:main"
+
+[tool.hatch.version]
+path = "src/wyoming_openai_gateway/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wyoming_openai_gateway"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

@@ -1,0 +1,25 @@
+name: Publish Release Wheel
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build wheel
+        run: |
+          pip install hatchling
+          pip wheel --no-cache-dir --wheel-dir dist .
+      - name: Publish to PyPI
+        run: |
+          pip install twine
+          twine upload dist/*.whl
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

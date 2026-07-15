@@ -1,0 +1,24 @@
+services:
+  wyoming-openai-gateway:
+    build: .
+    container_name: wyoming-openai-gateway
+    restart: unless-stopped
+    ports:
+      - "8555:8555"
+    environment:
+      - WYOMING_HOST=${WYOMING_HOST:-127.0.0.1}
+      - WYOMING_PORT=${WYOMING_PORT:-10205}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8555/healthz')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
