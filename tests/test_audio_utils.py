@@ -45,8 +45,10 @@ def test_assemble_wav():
     assert len(wav_bytes) > 44  # Header + data
     assert wav_bytes[:4] == b"RIFF"
     assert wav_bytes[8:12] == b"WAVE"
-    # Data chunk should follow header
-    data_size = len(wav_bytes) - 44
-    assert wav_bytes[40:44] == b"data"
-    # Data size at offset 4 should account for everything after RIFF
+    # Data chunk ID is at byte 36
+    assert wav_bytes[36:40] == b"data"
+    # Data size at byte 40 should be the PCM data length
+    data_size = int.from_bytes(wav_bytes[40:44], "little")
     assert data_size == 200  # 100 samples * 2 bytes
+    # Total file size should be header (44) + data
+    assert len(wav_bytes) == 44 + data_size

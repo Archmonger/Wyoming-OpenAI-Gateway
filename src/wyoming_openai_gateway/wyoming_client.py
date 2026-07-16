@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator
 
+from wyoming.asr import Transcribe, Transcript
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
 from wyoming.client import AsyncTcpClient
 from wyoming.event import Event
@@ -116,3 +117,72 @@ class WyomingStreamClient:
             raise WyomingProtocolError("No audio data received during synthesis")
 
         return audio_params, b"".join(audio_chunks)
+
+    async def transcribe(
+        self,
+        audio_bytes: bytes,
+        rate: int = 16000,
+        width: int = 2,
+        channels: int = 1,
+        language: str | None = None,
+        model_name: str | None = None,
+    ) -> str:
+        """Send audio data for transcription via Wyoming ASR protocol.
+
+        Returns the transcribed text.
+        """
+        if self._client is None:
+            raise WyomingConnectionError("Not connected to Wyoming server")
+
+        try:
+            # 1. Send Transcribe event with metadata
+            transcribe_event = Transcribe(
+                name=model_name,
+                language=language,
+            )
+            await self._client.write_event(transcribe_event.event())
+
+            # 2. Send AudioStart with format info
+            audio_start = AudioStart(
+                rate=rate,
+                width=width,
+                channels=channels,
+            )
+            await self._client.write_event(audio_start.event())
+
+            # 3. Send audio data as one or more AudioChunks
+            # Split into reasonable chunks (e.g., 8192 bytes per chunk)
+            chunk_size = 8192
+            offset = 0
+            while offset < len(audio_bytes):
+                chunk_data = audio_bytes[offset : offset + chunk_size]
+                audio_chunk = AudioChunk(
+                    rate=rate,
+                    width=width,
+                    channels=channels,
+                    audio=chunk_data,
+                )
+                await self._client.write_event(audio_chunk.event())
+                offset += chunk_size
+
+            # 4. Send AudioStop
+            audio_stop = AudioStop()
+            await self._client.write_event(audio_stop.event())
+
+            # 5. Read the response — expect Transcript event
+            while True:
+                event = await self._client.read_event()
+                if event is None:
+                    raise WyomingProtocolError(
+                        "Wyoming server closed connection without returning a transcript"
+                    )
+
+                if Transcript.is_type(event.type):
+                    transcript = Transcript.from_event(event)
+                    return transcript.text
+        except WyomingConnectionError:
+            raise
+        except WyomingProtocolError:
+            raise
+        except Exception as e:
+            raise WyomingProtocolError(f"Error during Wyoming transcribe: {e}") from e

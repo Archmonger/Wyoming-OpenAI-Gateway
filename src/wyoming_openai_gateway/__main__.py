@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import logging
-import sys
 
 
 def main() -> None:
     """Run the Wyoming-OpenAI-Gateway server."""
-    from .config import Settings
     from .app import create_app
+    from .config import Settings
 
     settings = Settings._parse()
 

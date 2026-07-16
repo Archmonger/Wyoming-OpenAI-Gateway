@@ -9,7 +9,7 @@ def test_defaults():
     """Test Settings with default values."""
     settings = Settings()
     assert settings.wyoming_host == "127.0.0.1"
-    assert settings.wyoming_port == 10205
+    assert settings.wyoming_port == 10200
     assert settings.host == "0.0.0.0"
     assert settings.port == 8555
     assert settings.debug is False

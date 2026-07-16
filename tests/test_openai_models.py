@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from wyoming_openai_gateway.openai_models import SpeechRequest, Voice, VoicesResponse
+from wyoming_openai_gateway.openai_models import (
+    SpeechRequest,
+    TranscriptionRequest,
+    TranscriptionResponse,
+    TranslationResponse,
+    Voice,
+    VoicesResponse,
+)
+
+# ── TTS models ──────────────────────────────────────────────────────────────────
 
 
 def test_speech_request_defaults():
@@ -64,3 +73,58 @@ def test_voices_response():
     assert len(response.voices) == 2
     assert response.voices[0].id == "voice1"
     assert response.voices[1].id == "voice2"
+
+
+# ── STT models ──────────────────────────────────────────────────────────────────
+
+
+def test_transcription_request_defaults():
+    """Test TranscriptionRequest with only required fields."""
+    request = TranscriptionRequest(model="whisper-1")
+    assert request.model == "whisper-1"
+    assert request.language is None
+    assert request.prompt is None
+    assert request.response_format == "json"
+    assert request.temperature == 0.0
+    assert request.timestamp_granularities is None
+
+
+def test_transcription_request_full():
+    """Test TranscriptionRequest with all fields specified."""
+    request = TranscriptionRequest(
+        model="custom-model",
+        language="en",
+        prompt="Context prompt",
+        response_format="text",
+        temperature=0.5,
+        timestamp_granularities=["segment", "word"],
+    )
+    assert request.model == "custom-model"
+    assert request.language == "en"
+    assert request.prompt == "Context prompt"
+    assert request.response_format == "text"
+    assert request.temperature == 0.5
+    assert request.timestamp_granularities == ["segment", "word"]
+
+
+def test_transcription_request_alias():
+    """Test that the response_format and timestamp_granularities aliases work."""
+    request = TranscriptionRequest(
+        model="whisper-1",
+        response_format="text",
+        timestamp_granularities=["word"],
+    )
+    assert request.response_format == "text"
+    assert request.timestamp_granularities == ["word"]
+
+
+def test_transcription_response():
+    """Test TranscriptionResponse model."""
+    response = TranscriptionResponse(text="Hello world")
+    assert response.text == "Hello world"
+
+
+def test_translation_response():
+    """Test TranslationResponse model."""
+    response = TranslationResponse(text="Bonjour le monde")
+    assert response.text == "Bonjour le monde"

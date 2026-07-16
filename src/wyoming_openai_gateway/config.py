@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 import os
-from dataclasses import dataclass, field
-from typing import Mapping
+from collections.abc import Mapping
+from dataclasses import dataclass
 
 
 def _get_bool(key: str, default: str | bool = False) -> bool:
@@ -36,7 +35,9 @@ class Settings:
     """Application settings parsed from environment variables."""
 
     wyoming_host: str = "127.0.0.1"
-    wyoming_port: int = 10205
+    wyoming_port: int = 10200
+    asr_host: str = "127.0.0.1"
+    asr_port: int = 10200
     host: str = "0.0.0.0"
     port: int = 8555
     debug: bool = False
@@ -59,9 +60,14 @@ class Settings:
 
     @classmethod
     def _parse(cls) -> Settings:
+        fallback_host = os.environ.get("WYOMING_HOST", "127.0.0.1")
+        fallback_port = _get_int("WYOMING_PORT", 10200)
+
         return cls(
-            wyoming_host=os.environ.get("WYOMING_HOST", "127.0.0.1"),
-            wyoming_port=_get_int("WYOMING_PORT", 10205),
+            wyoming_host=fallback_host,
+            wyoming_port=fallback_port,
+            asr_host=os.environ.get("ASR_HOST", fallback_host),
+            asr_port=_get_int("ASR_PORT", fallback_port),
             host=os.environ.get("HOST", "0.0.0.0"),
             port=_get_int("PORT", 8555),
             debug=_get_bool("DEBUG", False),

@@ -2,21 +2,87 @@
 
 from __future__ import annotations
 
+import io
 import logging
-from typing import AsyncGenerator
+import struct
+import wave
+from collections.abc import AsyncGenerator
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
-from wyoming.event import Event
 
 from .audio_utils import assemble_wav, create_wav_header
 from .config import Settings
 from .errors import WyomingConnectionError, WyomingProtocolError
-from .openai_models import SpeechRequest, Voice, VoicesResponse
+from .openai_models import (
+    SpeechRequest,
+    TranscriptionRequest,
+    TranscriptionResponse,
+    TranslationResponse,
+    Voice,
+    VoicesResponse,
+)
 from .wyoming_client import WyomingStreamClient
 
 log = logging.getLogger(__name__)
+
+
+def _pcm_from_upload(
+    file: UploadFile,
+    target_rate: int = 16000,
+    target_width: int = 2,
+    target_channels: int = 1,
+) -> tuple[bytes, int, int, int]:
+    """Extract raw PCM audio from an uploaded audio file.
+
+    Returns (pcm_bytes, rate, width, channels).
+    WAV files are decoded; other formats are passed through raw.
+    """
+    raw = file.file.read()
+
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WAVE":
+        try:
+            with io.BytesIO(raw) as buf:
+                with wave.open(buf, "rb") as wav:
+                    rate = wav.getframerate()
+                    width = wav.getsampwidth()
+                    channels = wav.getnchannels()
+                    frames = wav.readframes(wav.getnframes())
+            log.debug(
+                "Decoded WAV: %d Hz, %d-bit, %d ch, %d frames",
+                rate, width * 8, channels, len(frames) // (width * channels) if width * channels > 0 else 0,
+            )
+            # Convert to target format if needed
+            pcm = frames
+            _, src_width, src_channels = rate, width, channels
+
+            # Simple mono conversion: mix to mono if stereo
+            if src_channels == 2 and target_channels == 1:
+                # Rough mono mix from 16-bit stereo interleaved
+                if src_width == 2:
+                    samples = struct.unpack("<" + "h" * (len(pcm) // 2))
+                    mono = [(samples[i] + samples[i + 1]) // 2 for i in range(0, len(samples), 2)]
+                    pcm = struct.pack("<" + "h" * len(mono), *mono)
+                elif src_width == 1:
+                    mono = bytes((pcm[i] + pcm[i + 1]) // 2 for i in range(0, len(pcm), 2))
+                    pcm = mono
+                src_channels = 1
+
+            # Convert to 16-bit if needed
+            if src_width == 1 and target_width == 2:
+                pcm = struct.pack("<" + "h" * len(pcm), *(b << 8 for b in pcm))
+                src_width = 2
+
+            return pcm, rate, src_width, src_channels
+        except Exception as e:
+            log.warning("Failed to decode uploaded WAV: %s — sending raw bytes", e)
+
+    log.debug(
+        "Passing through raw PCM (%d bytes, %d Hz, %d-bit, %d ch)",
+        len(raw), target_rate, target_width, target_channels,
+    )
+    return raw, target_rate, target_width, target_channels
 
 
 class OpenAIGateway:
@@ -43,7 +109,7 @@ class OpenAIGateway:
                         Voice(
                             id=voice.name,
                             name=voice.description or voice.name,
-                            description=voice.attribution,
+                            description=str(voice.attribution) if voice.attribution else None,
                             languages=voice.languages,
                         )
                     )
@@ -135,3 +201,57 @@ class OpenAIGateway:
         except WyomingProtocolError as e:
             log.error("Streaming failed: %s", e)
             raise HTTPException(status_code=500, detail=str(e))
+
+    async def transcribe_audio(
+        self,
+        file: UploadFile,
+        request: TranscriptionRequest,
+        is_translation: bool = False,
+    ) -> TranscriptionResponse | TranslationResponse:
+        """Transcribe or translate audio using Wyoming ASR protocol.
+
+        Accepts OpenAI-compatible multipart form data, extracts PCM audio,
+        sends it to the Wyoming ASR server, and returns the result as JSON.
+        """
+        log.info(
+            "Processing STT request: model=%s, language=%s, translate=%s",
+            request.model,
+            request.language,
+            is_translation,
+        )
+
+        pcm_bytes, rate, width, channels = _pcm_from_upload(
+            file, target_rate=16000, target_width=2, target_channels=1,
+        )
+
+        if not pcm_bytes:
+            raise HTTPException(status_code=400, detail="No audio data received")
+
+        log.debug(
+            "Audio input: %d bytes, %d Hz, %d-bit, %d channels",
+            len(pcm_bytes), rate, width * 8, channels,
+        )
+
+        try:
+            async with WyomingStreamClient(
+                self._settings.asr_host, self._settings.asr_port
+            ) as client:
+                text = await client.transcribe(
+                    audio_bytes=pcm_bytes,
+                    rate=rate,
+                    width=width,
+                    channels=channels,
+                    language=request.language,
+                    model_name=request.model,
+                )
+        except WyomingConnectionError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+        except WyomingProtocolError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
+        log.info("Transcription result (%d chars): %s", len(text), text[:100])
+
+        if is_translation:
+            return TranslationResponse(text=text)
+
+        return TranscriptionResponse(text=text)
