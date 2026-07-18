@@ -120,7 +120,11 @@ def _pcm_from_upload(
         )
 
         if proc.returncode != 0:
-            log.warning("ffmpeg conversion failed (rc=%d): %s", proc.returncode, proc.stderr.decode(errors="replace")[:200])
+            log.warning(
+                "ffmpeg conversion failed (rc=%d): %s",
+                proc.returncode,
+                proc.stderr.decode(errors="replace")[:200],
+            )
             return raw, target_rate, target_width, target_channels
 
         wav_bytes = proc.stdout
