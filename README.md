@@ -18,10 +18,10 @@ A gateway that exposes local [Wyoming](https://github.com/rhasspy/wyoming) proto
 docker run -d \
   --name wyoming-openai-gateway \
   -p 8555:8555 \
-  -e WYOMING_HOST=your-tts-server \
-  -e WYOMING_PORT=10205 \
-  -e ASR_HOST=your-asr-server \
-  -e ASR_PORT=10200 \
+  -e TTS_HOST=your-tts-server \
+  -e TTS_PORT=10200 \
+  -e STT_HOST=your-asr-server \
+  -e STT_PORT=10200 \
   ghcr.io/archmonger/wyoming-openai-gateway:latest
 ```
 
@@ -30,8 +30,8 @@ docker run -d \
 ```bash
 pip install wyoming-openai-gateway
 
-WYOMING_HOST=127.0.0.1 WYOMING_PORT=10205 \
-ASR_HOST=127.0.0.1 ASR_PORT=10200 \
+TTS_HOST=127.0.0.1 TTS_PORT=10200 \
+STT_HOST=127.0.0.1 STT_PORT=10200 \
 wyoming-openai-gateway
 ```
 
@@ -39,8 +39,8 @@ wyoming-openai-gateway
 
 ```bash
 wget https://raw.githubusercontent.com/archmonger/Wyoming-OpenAI-Gateway/main/compose.yml
-WYOMING_HOST=127.0.0.1 WYOMING_PORT=10205 \
-ASR_HOST=127.0.0.1 ASR_PORT=10200 \
+TTS_HOST=127.0.0.1 TTS_PORT=10200 \
+STT_HOST=127.0.0.1 STT_PORT=10200 \
 docker compose up -d
 ```
 
@@ -148,17 +148,17 @@ All configuration is done via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WYOMING_HOST` | `127.0.0.1` | Wyoming TTS server hostname |
-| `WYOMING_PORT` | `10200` | Wyoming TTS server port |
-| `ASR_HOST` | value of `WYOMING_HOST` | Wyoming ASR (STT) server hostname |
-| `ASR_PORT` | value of `WYOMING_PORT` | Wyoming ASR (STT) server port |
+| `TTS_HOST` | `127.0.0.1` | Wyoming TTS server hostname |
+| `TTS_PORT` | `10200` | Wyoming TTS server port |
+| `STT_HOST` | value of `TTS_HOST` | Wyoming ASR (STT) server hostname |
+| `STT_PORT` | value of `TTS_PORT` | Wyoming ASR (STT) server port |
 | `HOST` | `0.0.0.0` | Gateway HTTP listen address |
 | `PORT` | `8555` | Gateway HTTP listen port |
 | `PREFIX` | `/v1` | API route prefix |
 | `DEBUG` | `false` | Enable debug logging |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
-> **Note:** `ASR_HOST` and `ASR_PORT` default to the values of `WYOMING_HOST` and `WYOMING_PORT` respectively. If your TTS and ASR servers run on the same host but different ports, you only need to set the port overrides.
+> **Note:** `STT_HOST` and `STT_PORT` default to the values of `TTS_HOST` and `TTS_PORT` respectively. If your TTS and ASR servers run on the same host but different ports, you only need to set the port overrides.
 
 ## Architecture
 

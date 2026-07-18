@@ -6,8 +6,8 @@ services:
     ports:
       - "8555:8555"
     environment:
-      - WYOMING_HOST=${WYOMING_HOST:-127.0.0.1}
-      - WYOMING_PORT=${WYOMING_PORT:-10205}
+      - TTS_HOST=${TTS_HOST:-127.0.0.1}
+      - TTS_PORT=${TTS_PORT:-10205}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - DEBUG=${DEBUG:-false}
     healthcheck:

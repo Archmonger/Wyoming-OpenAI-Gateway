@@ -32,19 +32,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         log.info(
             "Starting Wyoming-OpenAI-Gateway v%s (Wyoming target: %s:%s)",
             __version__,
-            settings.wyoming_host,
-            settings.wyoming_port,
+            settings.tts_host,
+            settings.tts_port,
         )
         # Validate Wyoming connectivity on startup (non-fatal)
         try:
-            async with WyomingStreamClient(settings.wyoming_host, settings.wyoming_port) as client:
+            async with WyomingStreamClient(settings.tts_host, settings.tts_port) as client:
                 await client.describe()
             log.info("Successfully connected to Wyoming server")
         except WyomingConnectionError:
             log.warning(
                 "Could not connect to Wyoming server at %s:%s — will retry on each request",
-                settings.wyoming_host,
-                settings.wyoming_port,
+                settings.tts_host,
+                settings.tts_port,
             )
         except Exception:
             log.warning("Unexpected error during Wyoming connectivity check", exc_info=True)
@@ -67,7 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/readyz")
     async def readyz():
         try:
-            async with WyomingStreamClient(settings.wyoming_host, settings.wyoming_port) as client:
+            async with WyomingStreamClient(settings.tts_host, settings.tts_port) as client:
                 await client.describe()
             return {"status": "ready"}
         except WyomingConnectionError as e:

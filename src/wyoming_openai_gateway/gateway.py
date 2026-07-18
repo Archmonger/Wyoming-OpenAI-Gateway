@@ -95,7 +95,7 @@ class OpenAIGateway:
         """List all available TTS voices from the Wyoming server."""
         try:
             async with WyomingStreamClient(
-                self._settings.wyoming_host, self._settings.wyoming_port
+                self._settings.tts_host, self._settings.tts_port
             ) as client:
                 info = await client.describe()
         except WyomingConnectionError as e:
@@ -131,7 +131,7 @@ class OpenAIGateway:
         """Generate complete (non-streaming) speech response."""
         try:
             async with WyomingStreamClient(
-                self._settings.wyoming_host, self._settings.wyoming_port
+                self._settings.tts_host, self._settings.tts_port
             ) as client:
                 audio_params, audio_data = await client.synthesize_complete(
                     text=request.input,
@@ -171,7 +171,7 @@ class OpenAIGateway:
         """Async generator that yields WAV header then audio chunks."""
         try:
             async with WyomingStreamClient(
-                self._settings.wyoming_host, self._settings.wyoming_port
+                self._settings.tts_host, self._settings.tts_port
             ) as client:
                 wav_header_sent = False
                 async for event in client.synthesize_stream(
@@ -234,7 +234,7 @@ class OpenAIGateway:
 
         try:
             async with WyomingStreamClient(
-                self._settings.asr_host, self._settings.asr_port
+                self._settings.stt_host, self._settings.stt_port
             ) as client:
                 text = await client.transcribe(
                     audio_bytes=pcm_bytes,

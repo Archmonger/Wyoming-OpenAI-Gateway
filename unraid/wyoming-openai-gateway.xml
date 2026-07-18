@@ -14,8 +14,8 @@
   <TemplateURL>https://raw.githubusercontent.com/archmonger/Wyoming-OpenAI-Gateway/main/unraid/wyoming-openai-gateway.xml</TemplateURL>
   <Icon>https://cdn.jsdelivr.net/gh/selfhst/icons/svg/openai.svg</Icon>
   <Config Name="WebUI Port" Target="8555" Default="8555" Mode="tcp" Description="Gateway web UI port" Type="integer" Display="always" Required="true" Mask="false">8555</Config>
-  <Config Name="Wyoming Host" Target="WYOMING_HOST" Default="127.0.0.1" Mode="" Description="Wyoming server hostname" Type="text" Display="always" Required="true" Mask="false">127.0.0.1</Config>
-  <Config Name="Wyoming Port" Target="WYOMING_PORT" Default="10205" Mode="" Description="Wyoming server port" Type="integer" Display="always" Required="true" Mask="false">10205</Config>
+  <Config Name="TTS Host" Target="TTS_HOST" Default="127.0.0.1" Mode="" Description="Wyoming server hostname" Type="text" Display="always" Required="true" Mask="false">127.0.0.1</Config>
+  <Config Name="TTS Port" Target="TTS_PORT" Default="10205" Mode="" Description="Wyoming server port" Type="integer" Display="always" Required="true" Mask="false">10205</Config>
   <Config Name="Debug" Target="DEBUG" Default="false" Mode="" Description="Enable debug logging" Type="text" Display="always" Required="false" Mask="false">false</Config>
   <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Logging level" Type="text" Display="always" Required="false" Mask="false">INFO</Config>
 </Container>

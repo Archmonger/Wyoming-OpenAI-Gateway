@@ -17,10 +17,10 @@ _DEAD_PORT = 19999
 def settings_no_wyoming() -> Settings:
     """Settings that point to a non-existent Wyoming server."""
     return Settings(
-        wyoming_host="127.0.0.1",
-        wyoming_port=_DEAD_PORT,
-        asr_host="127.0.0.1",
-        asr_port=_DEAD_PORT,
+        tts_host="127.0.0.1",
+        tts_port=_DEAD_PORT,
+        stt_host="127.0.0.1",
+        stt_port=_DEAD_PORT,
     )
 
 
