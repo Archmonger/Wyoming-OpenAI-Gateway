@@ -1,13 +1,13 @@
 # Wyoming-OpenAI-Gateway
 
-A gateway that exposes local [Wyoming](https://github.com/rhasspy/wyoming) protocol services via OpenAI-compatible API endpoints. This allows any OpenAI-compatible client to use local Wyoming speech services (TTS **and** ASR/STT) without modification.
+A gateway that exposes local [Wyoming](https://github.com/rhasspy/wyoming) protocol services via OpenAI-compatible API endpoints. This allows any OpenAI-compatible client to use local Wyoming speech services (TTS **and** STT) without modification.
 
 ## Features
 
 - **OpenAI-Compatible API** — Drop-in replacement for OpenAI's `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations`, and `/v1/voices` endpoints
-- **Wyoming Protocol** — Connects to any Wyoming-compatible TTS service (Piper, Sherpa-ONNX, etc.) **and** any Wyoming-compatible ASR service (faster-whisper, Sherpa-ONNX, etc.)
-- **Streaming Support** — Real-time audio streaming for both TTS and ASR protocols
-- **Single Binary** — Install via pip or Docker, deploy anywhere
+- **Wyoming Protocol** — Connects to any Wyoming-compatible TTS service (Piper, Sherpa-ONNX, etc.) **and** any Wyoming-compatible STT service (faster-whisper, Sherpa-ONNX, etc.)
+- **Streaming Support** — Real-time audio streaming for both TTS and STT protocols
+- **Zero System Dependencies** — Audio transcoding via `miniaudio` (bundled wheels, ~30x faster than subprocess-based ffmpeg)
 - **Health Checks** — Kubernetes/Docker-ready `/healthz` and `/readyz` endpoints
 
 ## Quick Start
@@ -20,8 +20,8 @@ docker run -d \
   -p 8555:8555 \
   -e TTS_HOST=your-tts-server \
   -e TTS_PORT=10200 \
-  -e STT_HOST=your-asr-server \
-  -e STT_PORT=10200 \
+  -e STT_HOST=your-stt-server \
+  -e STT_PORT=10300 \
   ghcr.io/archmonger/wyoming-openai-gateway:latest
 ```
 
@@ -31,7 +31,7 @@ docker run -d \
 pip install wyoming-openai-gateway
 
 TTS_HOST=127.0.0.1 TTS_PORT=10200 \
-STT_HOST=127.0.0.1 STT_PORT=10200 \
+STT_HOST=127.0.0.1 STT_PORT=10300 \
 wyoming-openai-gateway
 ```
 
@@ -40,7 +40,7 @@ wyoming-openai-gateway
 ```bash
 wget https://raw.githubusercontent.com/archmonger/Wyoming-OpenAI-Gateway/main/compose.yml
 TTS_HOST=127.0.0.1 TTS_PORT=10200 \
-STT_HOST=127.0.0.1 STT_PORT=10200 \
+STT_HOST=127.0.0.1 STT_PORT=10300 \
 docker compose up -d
 ```
 
@@ -92,55 +92,28 @@ Generates speech audio from text.
 
 ### `POST /v1/audio/transcriptions`
 
-Transcribes audio into the input language. Mirrors OpenAI's [Create Transcription](https://platform.openai.com/docs/api-reference/audio/createTranscription) endpoint.
+Transcribes audio to text using a Wyoming STT server.
 
-**Request Body (multipart/form-data):**
+**Request:** `multipart/form-data`
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `file` | file | (required) | The audio file to transcribe (WAV or raw PCM) |
-| `model` | string | `"whisper-1"` | Model identifier (passed to Wyoming ASR) |
-| `language` | string | `null` | Language code (e.g. `"en"`) |
-| `prompt` | string | `null` | Optional context prompt (not yet implemented) |
+| `file` | file | (required) | Audio file (WAV, MP3, FLAC, etc.) |
+| `model` | string | `"whisper-1"` | Model identifier (passed to Wyoming STT) |
+| `language` | string | optional | Language code (e.g. `"en"`) |
 | `response_format` | string | `"json"` | Response format (`json` or `text`) |
 | `temperature` | float | `0.0` | Sampling temperature |
 
-**Example using `curl`:**
-```bash
-curl http://localhost:8555/v1/audio/transcriptions \
-  -F "file=@recording.wav" \
-  -F "model=whisper-1" \
-  -F "language=en"
-```
-
-**Response (JSON):**
+**Response:**
 ```json
 {
-  "text": "Hello, world! This is a transcription."
+  "text": "Your hands lay open in the long fresh grass."
 }
 ```
 
 ### `POST /v1/audio/translations`
 
-Translates audio into English. Mirrors OpenAI's [Create Translation](https://platform.openai.com/docs/api-reference/audio/createTranslation) endpoint.
-
-**Request Body (multipart/form-data):**
-
-Same fields as `POST /v1/audio/transcriptions`.
-
-**Example using `curl`:**
-```bash
-curl http://localhost:8555/v1/audio/translations \
-  -F "file=@french_recording.wav" \
-  -F "model=whisper-1"
-```
-
-**Response (JSON):**
-```json
-{
-  "text": "Hello, this is a translation."
-}
-```
+Same as transcriptions, but translates the audio to English text.
 
 ## Configuration
 
@@ -148,66 +121,32 @@ All configuration is done via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `TTS_HOST` | `127.0.0.1` | Wyoming TTS server hostname |
-| `TTS_PORT` | `10200` | Wyoming TTS server port |
-| `STT_HOST` | value of `TTS_HOST` | Wyoming ASR (STT) server hostname |
-| `STT_PORT` | value of `TTS_PORT` | Wyoming ASR (STT) server port |
+| `TTS_HOST` | *(none)* | Wyoming TTS server hostname (omit to disable TTS) |
+| `TTS_PORT` | *(none)* | Wyoming TTS server port (required if TTS_HOST is set) |
+| `STT_HOST` | *(none)* | Wyoming STT server hostname (omit to disable STT) |
+| `STT_PORT` | *(none)* | Wyoming STT server port (required if STT_HOST is set) |
 | `HOST` | `0.0.0.0` | Gateway HTTP listen address |
 | `PORT` | `8555` | Gateway HTTP listen port |
 | `PREFIX` | `/v1` | API route prefix |
 | `DEBUG` | `false` | Enable debug logging |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
-> **Note:** `STT_HOST` and `STT_PORT` default to the values of `TTS_HOST` and `TTS_PORT` respectively. If your TTS and ASR servers run on the same host but different ports, you only need to set the port overrides.
+> **Validation:** At least one of `TTS_HOST` or `STT_HOST` must be defined. It is an error to set only a host without its corresponding port, or vice versa. If neither host is defined, the application will exit with an error.
 
 ## Architecture
 
 ```
-                        ┌──────────────────────────────────┐
-                        │          Wyoming Server(s)       │
-                        │  ┌────────────────────────────┐  │
-┌─────────────────┐     │  │  Wyoming TTS Server         │  │
-│                 │     │  │  (Piper, Sherpa-ONNX, ...)  │  │
-│ OpenAI-compatible│ HTTP │  └────────────────────────────┘  │
-│ Client          │────▶│                                   │
-│ (curl, ST, Home │     │  ┌────────────────────────────┐  │
-│  Assistant, etc.)│     │  │  Wyoming ASR Server        │  │
-│                 │◀────│  │  (faster-whisper,          │  │
-└─────────────────┘     │  │   Sherpa-ONNX, ...)        │  │
-                        │  └────────────────────────────┘  │
-                        └──────────────────────────────────┘
-                                ▲
-                                │ TCP (Wyoming Protocol)
-                                ▼
-                        ┌──────────────────────┐
-                        │                      │
-                        │  Wyoming-OpenAI-     │
-                        │  Gateway             │
-                        │                      │
-                        │  FastAPI → Wyoming   │
-                        │  Protocol Translator  │
-                        │                      │
-                        └──────────────────────┘
-                                ▲
-                                │ HTTP (OpenAI API)
-                                ▼
-                        ┌─────────────────┐
-                        │                 │
-                        │  OpenAI-compatible│
-                        │  Client          │
-                        │                 │
-                        └─────────────────┘
+┌─────────────────────┐       ┌──────────────────────┐       ┌──────────────────────┐
+│                     │       │                      │       │                      │
+│  OpenAI-compatible  │ HTTP  │  Wyoming-OpenAI-     │ TCP   │  Wyoming Protocol    │
+│  Client             │──────▶│  Gateway             │──────▶│  Server (TTS/STT)   │
+│  (curl, ST, Home   │       │                      │       │                      │
+│   Assistant, etc.)  │       │  FastAPI → Wyoming   │       │  Piper / Whisper     │
+│                     │◀──────│  Protocol Translator  │◀──────│                      │
+└─────────────────────┘       └──────────────────────┘       └──────────────────────┘
 ```
 
-The gateway acts as a **protocol translator** between OpenAI's HTTP API and the Wyoming TCP protocol. It maps REST endpoints to Wyoming events:
-
-| OpenAI Endpoint | Wyoming Events |
-|-----------------|----------------|
-| `POST /v1/audio/speech` | `Describe` → `Synthesize` → `AudioStart` → `AudioChunk(s)` → `AudioStop` |
-| `POST /v1/audio/transcriptions` | `Transcribe` → `AudioStart` → `AudioChunk(s)` → `AudioStop` → `Transcript` |
-| `POST /v1/audio/translations` | `Transcribe` → `AudioStart` → `AudioChunk(s)` → `AudioStop` → `Transcript` |
-
-Audio data from uploaded files is automatically decoded (WAV files are parsed for sample rate, bit depth, and channel count; other formats are passed through as raw PCM).
+The gateway acts as a **protocol translator** between OpenAI's HTTP API and the Wyoming TCP protocol. It maps REST endpoints to Wyoming events (Describe, Synthesize, Transcribe, etc.) and translates audio data formats transparently using `miniaudio`.
 
 ## Development
 
@@ -225,6 +164,8 @@ pytest --cov=wyoming_openai_gateway
 ruff check src/ tests/
 
 # Start the gateway
+TTS_HOST=127.0.0.1 TTS_PORT=10200 \
+STT_HOST=127.0.0.1 STT_PORT=10300 \
 python -m wyoming_openai_gateway
 ```
 

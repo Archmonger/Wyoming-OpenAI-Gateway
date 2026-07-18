@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import io
 import logging
-import struct
-import subprocess
-import wave
 from collections.abc import AsyncGenerator
 
+import miniaudio
 from fastapi import HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from wyoming.audio import AudioChunk, AudioStart, AudioStop
@@ -29,131 +26,47 @@ from .wyoming_client import WyomingStreamClient
 log = logging.getLogger(__name__)
 
 
+WYOMING_TARGET_RATE = 16000
+WYOMING_TARGET_WIDTH = 2
+WYOMING_TARGET_CHANNELS = 1
+
+
 def _pcm_from_upload(
     file: UploadFile,
-    target_rate: int = 16000,
-    target_width: int = 2,
-    target_channels: int = 1,
 ) -> tuple[bytes, int, int, int]:
-    """Extract raw PCM audio from an uploaded audio file.
+    """Decode uploaded audio to raw PCM via miniaudio.
 
     Returns (pcm_bytes, rate, width, channels).
 
-    Handles WAV files natively. All other formats (MP3, FLAC, OGG, WebM, etc.)
-    are decoded via ffmpeg to the target format. If ffmpeg is not available,
-    falls back to passing the raw bytes through.
+    Supports WAV, MP3, FLAC, and other formats miniaudio can decode.
     """
     raw = file.file.read()
 
     if not raw:
         log.warning("Uploaded file is empty")
-        return b"", target_rate, target_width, target_channels
+        return b"", WYOMING_TARGET_RATE, WYOMING_TARGET_WIDTH, WYOMING_TARGET_CHANNELS
 
-    # --- Case 1: Native WAV decoding ---
-    if raw[:4] == b"RIFF" and raw[8:12] == b"WAVE":
-        try:
-            with io.BytesIO(raw) as buf:
-                with wave.open(buf, "rb") as wav:
-                    rate = wav.getframerate()
-                    width = wav.getsampwidth()
-                    channels = wav.getnchannels()
-                    frames = wav.readframes(wav.getnframes())
-            log.debug(
-                "Decoded WAV: %d Hz, %d-bit, %d ch, %d frames",
-                rate, width * 8, channels,
-                len(frames) // (width * channels) if width * channels > 0 else 0,
-            )
-
-            pcm = frames
-            src_width, src_channels = width, channels
-
-            # Stereo-to-mono downmix
-            if src_channels == 2 and target_channels == 1:
-                if src_width == 2:
-                    samples = struct.unpack("<" + "h" * (len(pcm) // 2))
-                    mono = [(samples[i] + samples[i + 1]) // 2 for i in range(0, len(samples), 2)]
-                    pcm = struct.pack("<" + "h" * len(mono), *mono)
-                elif src_width == 1:
-                    mono = bytes((pcm[i] + pcm[i + 1]) // 2 for i in range(0, len(pcm), 2))
-                    pcm = mono
-                src_channels = 1
-
-            # 8-bit to 16-bit up-conversion
-            if src_width == 1 and target_width == 2:
-                pcm = struct.pack("<" + "H" * len(pcm), *(b << 8 for b in pcm))
-                src_width = 2
-
-            # Return original rate — the Wyoming server handles resampling
-            return pcm, rate, src_width, src_channels
-
-        except Exception as e:
-            log.warning("Failed to parse uploaded WAV: %s — trying ffmpeg fallback", e)
-
-    # --- Case 2: Non-WAV — decode via ffmpeg ---
     try:
-        # Probe the input format first
-        probe = subprocess.run(
-            ["ffprobe", "-hide_banner", "-v", "quiet", "-show_format", "-show_streams",
-             "-of", "json", "pipe:0"],
-            input=raw,
-            capture_output=True,
-            timeout=15,
+        result = miniaudio.decode(
+            raw,
+            output_format=miniaudio.SampleFormat.SIGNED16,
         )
-        if probe.returncode != 0:
-            log.warning("ffprobe could not identify audio format, sending raw bytes")
-            return raw, target_rate, target_width, target_channels
-
-        # Convert to WAV via ffmpeg
-        proc = subprocess.run(
-            [
-                "ffmpeg", "-y", "-hide_banner", "-v", "error",
-                "-i", "pipe:0",
-                "-ar", str(target_rate),
-                "-ac", str(target_channels),
-                "-sample_fmt", "s16",
-                "-f", "wav",
-                "pipe:1",
-            ],
-            input=raw,
-            capture_output=True,
-            timeout=120,
-        )
-
-        if proc.returncode != 0:
-            log.warning(
-                "ffmpeg conversion failed (rc=%d): %s",
-                proc.returncode,
-                proc.stderr.decode(errors="replace")[:200],
-            )
-            return raw, target_rate, target_width, target_channels
-
-        wav_bytes = proc.stdout
-        if len(wav_bytes) < 44:
-            log.warning("ffmpeg produced invalid WAV (%d bytes), sending raw", len(wav_bytes))
-            return raw, target_rate, target_width, target_channels
-
-        # Extract PCM from the converted WAV
-        with io.BytesIO(wav_bytes) as buf:
-            with wave.open(buf, "rb") as wav:
-                pcm = wav.readframes(wav.getnframes())
-
-        log.info(
-            "Decoded %s via ffmpeg: %d Hz, 16-bit, %d ch, %d PCM bytes",
+        # result: DecodeResult with .samples (array('h')), .sample_rate, .nchannels
+        pcm = result.samples.tobytes()
+        log.debug(
+            "Decoded %s: %d Hz, 16-bit, %d ch, %d PCM bytes",
             file.filename or "audio",
-            target_rate, target_channels,
+            result.sample_rate,
+            result.nchannels,
             len(pcm),
         )
-        return pcm, target_rate, target_width, target_channels
-
-    except FileNotFoundError:
-        log.warning("ffmpeg not found on system — cannot decode audio format, sending raw bytes")
-        return raw, target_rate, target_width, target_channels
-    except subprocess.TimeoutExpired:
-        log.warning("ffmpeg conversion timed out — sending raw bytes")
-        return raw, target_rate, target_width, target_channels
+        # Return native sample rate — the Wyoming server handles resampling
+        return pcm, result.sample_rate, WYOMING_TARGET_WIDTH, result.nchannels
     except Exception as e:
-        log.warning("ffmpeg conversion error: %s — sending raw bytes", e)
-        return raw, target_rate, target_width, target_channels
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported audio format or corrupt file: {e}",
+        )
 
 
 class OpenAIGateway:
@@ -164,6 +77,9 @@ class OpenAIGateway:
 
     async def list_voices(self) -> VoicesResponse:
         """List all available TTS voices from the Wyoming TTS server."""
+        if self._settings.tts_host is None or self._settings.tts_port is None:
+            raise HTTPException(status_code=503, detail="TTS not configured")
+
         try:
             async with WyomingStreamClient(
                 self._settings.tts_host, self._settings.tts_port
@@ -189,11 +105,20 @@ class OpenAIGateway:
             return VoicesResponse(voices=[])
         return VoicesResponse(voices=voices)
 
-    async def text_to_speech(self, request: SpeechRequest) -> Response:
-        """Convert text to speech via Wyoming protocol.
+    async def list_models(self) -> list[dict]:
+        """List available models based on configured services."""
+        models = []
+        if self._settings.tts_host and self._settings.tts_port:
+            models.append({"id": "wyoming-tts", "object": "model", "created": 0, "owned_by": "wyoming"})
+        if self._settings.stt_host and self._settings.stt_port:
+            models.append({"id": "whisper-1", "object": "model", "created": 0, "owned_by": "wyoming"})
+        return models
 
-        Returns either a complete WAV file or a streaming WAV response.
-        """
+    async def text_to_speech(self, request: SpeechRequest) -> Response:
+        """Convert text to speech via Wyoming protocol."""
+        if self._settings.tts_host is None or self._settings.tts_port is None:
+            raise HTTPException(status_code=503, detail="TTS not configured")
+
         if request.stream:
             return await self._stream_speech(request)
         return await self._complete_speech(request)
@@ -279,11 +204,10 @@ class OpenAIGateway:
         request: TranscriptionRequest,
         is_translation: bool = False,
     ) -> TranscriptionResponse | TranslationResponse:
-        """Transcribe or translate audio using Wyoming ASR protocol.
+        """Transcribe or translate audio using Wyoming ASR protocol."""
+        if self._settings.stt_host is None or self._settings.stt_port is None:
+            raise HTTPException(status_code=503, detail="STT not configured")
 
-        Accepts OpenAI-compatible multipart form data. Audio is decoded to
-        PCM (via wave or ffmpeg) and streamed to the Wyoming ASR server.
-        """
         log.info(
             "Processing STT request: model=%s, language=%s, format=%s, translate=%s",
             request.model,
@@ -292,12 +216,7 @@ class OpenAIGateway:
             is_translation,
         )
 
-        pcm_bytes, rate, width, channels = _pcm_from_upload(
-            file,
-            target_rate=16000,
-            target_width=2,
-            target_channels=1,
-        )
+        pcm_bytes, rate, width, channels = _pcm_from_upload(file)
 
         if not pcm_bytes:
             raise HTTPException(status_code=400, detail="No audio data received")

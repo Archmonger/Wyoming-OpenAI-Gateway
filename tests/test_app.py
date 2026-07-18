@@ -4,21 +4,28 @@ from __future__ import annotations
 
 import pytest
 
+# Valid WAV: 16-bit mono 16000 Hz, 160 samples (10ms) of silence
+# Total file = 44 header + 320 data = 364 bytes
+# RIFF chunk size = 364 - 8 = 356 (0x164)
+# Data chunk size = 320 (0x140)
+_WAV_SIZE = 356  # total file size - 8
+_WAV_DATA_SIZE = 160 * 2  # 320 bytes
+
 _WAV_SILENCE = (
     b"RIFF"
-    + b"\x00\x00\x00\x00"  # placeholder file size
+    + _WAV_SIZE.to_bytes(4, "little")
     + b"WAVE"
     + b"fmt "
-    + b"\x10\x00\x00\x00"  # chunk size (16)
+    + b"\x10\x00\x00\x00"  # fmt chunk size (16)
     + b"\x01\x00"  # PCM
     + b"\x01\x00"  # mono
     + b"\x80\x3e\x00\x00"  # 16000 Hz
-    + b"\x00\x7d\x00\x00"  # byte rate
-    + b"\x02\x00"  # block align
+    + (16000 * 1 * 2).to_bytes(4, "little")  # byte rate
+    + b"\x02\x00"  # block align (2)
     + b"\x10\x00"  # 16-bit
     + b"data"
-    + b"\x00\x00\x00\x00"  # placeholder data size
-    + b"\x00\x00" * 160  # 160 samples of silence (10 ms at 16 kHz)
+    + _WAV_DATA_SIZE.to_bytes(4, "little")
+    + b"\x00\x00" * 160  # 160 samples (10 ms at 16 kHz)
 )
 
 
