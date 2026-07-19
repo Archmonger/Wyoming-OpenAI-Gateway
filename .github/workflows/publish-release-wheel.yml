@@ -25,6 +25,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload ${{ github.ref_name }} dist/* \
-            --repo ${{ github.repository }}
+            --repo ${{ github.repository }} \
+            --clobber
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
