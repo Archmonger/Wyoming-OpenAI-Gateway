@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from wyoming_openai_gateway.config import Settings, validate
 
 
