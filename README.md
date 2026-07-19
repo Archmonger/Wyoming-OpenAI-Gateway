@@ -139,10 +139,10 @@ All configuration is done via environment variables:
 ┌─────────────────────┐       ┌──────────────────────┐       ┌──────────────────────┐
 │                     │       │                      │       │                      │
 │  OpenAI-compatible  │ HTTP  │  Wyoming-OpenAI-     │ TCP   │  Wyoming Protocol    │
-│  Client             │──────▶│  Gateway             │──────▶│  Server (TTS/STT)   │
-│  (curl, ST, Home   │       │                      │       │                      │
-│   Assistant, etc.)  │       │  FastAPI → Wyoming   │       │  Piper / Whisper     │
-│                     │◀──────│  Protocol Translator  │◀──────│                      │
+│  Client             │──────>│  Gateway             │──────>│  Server (TTS/STT)    │
+│  (curl, ST, Home    │       │                      │       │                      │
+│  Assistant, etc.)   │       │  FastAPI → Wyoming   │       │  Piper / Whisper     │
+│                     │<──────│  Protocol Translator │<──────│                      │
 └─────────────────────┘       └──────────────────────┘       └──────────────────────┘
 ```
 
