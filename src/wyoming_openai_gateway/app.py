@@ -29,25 +29,52 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        services = []
+        if settings.tts_host and settings.tts_port:
+            services.append(f"TTS at {settings.tts_host}:{settings.tts_port}")
+        if settings.stt_host and settings.stt_port:
+            services.append(f"STT at {settings.stt_host}:{settings.stt_port}")
+
         log.info(
-            "Starting Wyoming-OpenAI-Gateway v%s (Wyoming target: %s:%s)",
+            "Starting Wyoming-OpenAI-Gateway v%s — Services: %s",
             __version__,
-            settings.tts_host,
-            settings.tts_port,
+            ", ".join(services) if services else "none configured",
         )
-        # Validate Wyoming connectivity on startup (non-fatal)
-        try:
-            async with WyomingStreamClient(settings.tts_host, settings.tts_port) as client:
-                await client.describe()
-            log.info("Successfully connected to Wyoming server")
-        except WyomingConnectionError:
-            log.warning(
-                "Could not connect to Wyoming server at %s:%s — will retry on each request",
-                settings.tts_host,
-                settings.tts_port,
-            )
-        except Exception:
-            log.warning("Unexpected error during Wyoming connectivity check", exc_info=True)
+
+        # Validate TTS connectivity on startup (non-fatal)
+        if settings.tts_host and settings.tts_port:
+            try:
+                async with WyomingStreamClient(settings.tts_host, settings.tts_port) as client:
+                    await client.describe()
+                log.info("TTS server at %s:%s is reachable", settings.tts_host, settings.tts_port)
+            except WyomingConnectionError:
+                log.warning(
+                    "TTS server at %s:%s is unreachable — will retry on each request",
+                    settings.tts_host,
+                    settings.tts_port,
+                )
+            except Exception:
+                log.warning("Unexpected error during TTS connectivity check", exc_info=True)
+        else:
+            log.info("TTS is disabled")
+
+        # Validate STT connectivity on startup (non-fatal)
+        if settings.stt_host and settings.stt_port:
+            try:
+                async with WyomingStreamClient(settings.stt_host, settings.stt_port) as client:
+                    await client.describe()
+                log.info("STT server at %s:%s is reachable", settings.stt_host, settings.stt_port)
+            except WyomingConnectionError:
+                log.warning(
+                    "STT server at %s:%s is unreachable — will retry on each request",
+                    settings.stt_host,
+                    settings.stt_port,
+                )
+            except Exception:
+                log.warning("Unexpected error during STT connectivity check", exc_info=True)
+        else:
+            log.info("STT is disabled")
+
         yield
         log.info("Shutting down Wyoming-OpenAI-Gateway")
 
