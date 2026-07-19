@@ -5,7 +5,7 @@ on:
     types: [published]
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
@@ -20,5 +20,11 @@ jobs:
         run: |
           pip install hatchling build
           python -m build
+      - name: Upload wheel and sdist to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload ${{ github.ref_name }} dist/* \
+            --repo ${{ github.repository }}
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
